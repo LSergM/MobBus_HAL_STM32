@@ -15,5 +15,6 @@
 
 void vModbusProtocol(void);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
+int32_t i32ModbusSetUart(UART_HandleTypeDef * phuart);
 
 #endif /* SRC_MODBUS_H_ */
