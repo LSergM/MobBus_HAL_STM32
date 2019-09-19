@@ -89,6 +89,7 @@ int main(void)
   SystemClock_Config();
   MX_USART2_UART_Init();
   i32ModbusSetUart(&huart2);
+  i32SetModbusAdress(5);
 
   while (1)
   {
