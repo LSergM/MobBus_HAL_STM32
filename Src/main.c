@@ -82,15 +82,17 @@ UART_HandleTypeDef huart2;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_USART2_UART_Init(void);
+static void MX_GPIO_Init(void);
 
 int main(void)
 {
   HAL_Init();
   SystemClock_Config();
+//  MX_GPIO_Init();
   MX_USART2_UART_Init();
-  i32ModbusSetUart(&huart2);
   i32SetModbusAdress(5);
-
+  i32ModbusSetUart(&huart2);
+//  HAL_UART_Transmit(&huart2, (uint8_t*)buf1, sprintf(buf1,"count = %d\r\n", count), 1000);
   while (1)
   {
 	  vModbusProtocol();
@@ -167,7 +169,8 @@ static void MX_USART2_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 2 */
-
+  HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(USART2_IRQn);
   /* USER CODE END USART2_Init 2 */
 
 }

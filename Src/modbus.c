@@ -140,7 +140,7 @@ static void vModbus_ParseNewFrame(void)
 		au8TxBuf[2] = u8Error;
 		u32CntTxData = 3;
 	}
-	*(uint16_t *)&au8TxBuf[u32CntTxData] = u16GetCRC16((uint8_t *)au8TxBuf, u32CntTxData);
+	*(uint16_t *)&au8TxBuf[u32CntTxData] = u16GetCRC16((uint8_t *)&au8TxBuf, u32CntTxData);
 	u32CntTxData += 2;
 #ifdef RS485
 	RE_OFF;

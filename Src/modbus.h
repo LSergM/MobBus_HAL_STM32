@@ -20,10 +20,10 @@
 //#define RS485
 
 #ifdef RS485
-	#define DE_ON
-	#define DE_OFF
-	#define RE_ON
-	#define RE_OFF
+	#define DE_ON	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3)
+	#define DE_OFF	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3)
+	#define RE_ON	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3)
+	#define RE_OFF	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3)
 #endif
 
 void vModbusProtocol(void);
