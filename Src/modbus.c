@@ -7,27 +7,30 @@
 #include "modbus.h"
 #include "stm32f4xx_hal.h"
 #include "crc16.h"
+#include "string.h"
 
 #define FRAME_SIZE_MIN		7
 #define MODBUS_FUNCTION		1
 
-static uint8_t au8RxBuf[MODBUS_RX_BUFF_SIZE];
-static uint8_t au8TxBuf[MODBUS_TX_BUFF_SIZE];
 static uint8_t u8Buf;
+static uint8_t u8LockUART = 0;
+static uint8_t u8TimeOut = MODBUS_TIMEOUT_115200;
 static uint8_t u8DeviceAdress = 0;
 static uint32_t u32ResetTimeout = 0;
 static uint32_t u32CntRxData = 0;
 static uint32_t u32CntTxData = 0;
 static UART_HandleTypeDef * s_pHuart;
+static uint8_t au8RxBuf[MODBUS_RX_BUFF_SIZE];
+static uint8_t au8TxBuf[MODBUS_TX_BUFF_SIZE];
+static uint16_t au16ModbusRwReg[NUMBER_OF_RW_REGS];
+static uint16_t au16ModbusRReg[NUMBER_OF_R_REGS];
+
 
 static uint32_t u32ModbusGetTimeout(void);
 static void vModbus_ParseNewFrame(void);
 static uint8_t u8ModbusReadHoldingRegisters(void);
 static uint8_t u8ModbusReadInputRegisters(void);
 static uint8_t u8ModbusWriteMultipleHoldindRegisters(void);
-
-static uint16_t au16ModbusRwReg[NUMBER_OF_RW_REGS];
-static uint16_t au16ModbusRReg[NUMBER_OF_R_REGS];
 
 int32_t i32SetModbusAdress(uint8_t u8Adr)
 {
@@ -39,6 +42,27 @@ int32_t i32ModbusSetUart(UART_HandleTypeDef * phuart)
 {
 	HAL_SetTickFreq(HAL_TICK_FREQ_1KHZ);
 	s_pHuart = phuart;
+	switch(phuart->Init.BaudRate)
+	{
+	case 115200:
+		u8TimeOut = MODBUS_TIMEOUT_115200;
+		break;
+	case 57600:
+		u8TimeOut = MODBUS_TIMEOUT_57600;
+		break;
+	case 19200:
+		u8TimeOut = MODBUS_TIMEOUT_19200;
+		break;
+	case 9600:
+		u8TimeOut = MODBUS_TIMEOUT_9600;
+		break;
+	case 4800:
+		u8TimeOut = MODBUS_TIMEOUT_4800;
+		break;
+	default:
+		u8TimeOut = MODBUS_TIMEOUT_115200;
+		break;
+	}
 #ifdef RS485
 	DE_OFF;
 	RE_ON;
@@ -52,10 +76,12 @@ void vModbusProtocol(void)
 {
   if (u32CntRxData)
   {
-	  if(u32ModbusGetTimeout() > MODBUS_TIMEOUT_115200)
+	  if(u32ModbusGetTimeout() > u8TimeOut)
 	  {
+		  u8LockUART = 1;
 		  vModbus_ParseNewFrame();
 		  u32CntRxData = 0;
+		  u8LockUART = 0;
 	  }
   }
 }
@@ -81,13 +107,16 @@ static uint32_t u32ModbusGetTimeout(void)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	if (u32CntRxData < MODBUS_RX_BUFF_SIZE)
+	if (0 == u8LockUART)
 	{
-		au8RxBuf[u32CntRxData] = u8Buf;
+		if (u32CntRxData < MODBUS_RX_BUFF_SIZE)
+		{
+			au8RxBuf[u32CntRxData] = u8Buf;
+		}
+		u32ResetTimeout = 1;
+		u32CntRxData++;
 	}
 	HAL_UART_Receive_IT(s_pHuart, &u8Buf, 1);
-	u32ResetTimeout = 1;
-	u32CntRxData++;
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
@@ -255,4 +284,100 @@ static uint8_t u8ModbusWriteMultipleHoldindRegisters(void)
 		au8TxBuf[i] = au8RxBuf[i];
 	}
 	return (u8Error);
+}
+
+uint16_t u16GetModbusRwReg(uint16_t u16Adr)
+{
+	if (u16Adr < NUMBER_OF_RW_REGS)
+	{
+		return (au16ModbusRwReg[u16Adr]);
+	}
+	return (ERROR_OUT_OF_RANGE);
+}
+
+uint16_t u16SetModbusRwReg(uint16_t u16Adr, uint16_t u16Reg)
+{
+	if (u16Adr < NUMBER_OF_RW_REGS)
+	{
+		au16ModbusRwReg[u16Adr] = u16Reg;
+		return (OPERATION_SUCCED);
+	}
+	return (ERROR_OUT_OF_RANGE);
+}
+
+uint16_t u16GetModbusRReg(uint16_t u16Adr)
+{
+	if (u16Adr < NUMBER_OF_R_REGS)
+	{
+		return (au16ModbusRReg[u16Adr]);
+	}
+	return (ERROR_OUT_OF_RANGE);
+}
+
+uint16_t u16SetModbusRReg(uint16_t u16Adr, uint16_t u16Reg)
+{
+	if (u16Adr < NUMBER_OF_R_REGS)
+	{
+		au16ModbusRReg[u16Adr] = u16Reg;
+		return (OPERATION_SUCCED);
+	}
+	return (ERROR_OUT_OF_RANGE);
+}
+
+uint16_t u16GetModbusRwRegs(uint16_t u16Adr, uint16_t u16Nregs, uint16_t *pu16Regs)
+{
+	if (pu16Regs == NULL)
+	{
+		return (ERROR_OUT_OF_RANGE);
+	}
+	if ((u16Adr + u16Nregs) >= NUMBER_OF_RW_REGS)
+	{
+		return (ERROR_OUT_OF_RANGE);
+	}
+	memcpy(pu16Regs, &au16ModbusRwReg[u16Adr], u16Nregs * 2);
+	return (OPERATION_SUCCED);
+}
+
+uint16_t u16SetModbusRwRegs(uint16_t u16Adr, uint16_t u16Nregs, uint16_t *pu16Regs)
+{
+	if (pu16Regs == NULL)
+	{
+		return (ERROR_OUT_OF_RANGE);
+	}
+	if ((u16Adr + u16Nregs) >= NUMBER_OF_RW_REGS)
+	{
+		return (ERROR_OUT_OF_RANGE);
+	}
+	memcpy(&au16ModbusRwReg[u16Adr], pu16Regs, u16Nregs * 2);
+	return (OPERATION_SUCCED);
+}
+
+uint16_t u16GetModbusRRegs(uint16_t u16Adr, uint16_t u16Nregs, uint16_t *pu16Regs)
+{
+	if (pu16Regs == NULL)
+	{
+		return (ERROR_OUT_OF_RANGE);
+	}
+	if ((u16Adr + u16Nregs) >= NUMBER_OF_R_REGS)
+	{
+		return (ERROR_OUT_OF_RANGE);
+	}
+
+	memcpy(pu16Regs, &au16ModbusRReg[u16Adr], u16Nregs * 2);
+	return (OPERATION_SUCCED);
+}
+
+uint16_t u16SetModbusRRegs(uint16_t u16Adr, uint16_t u16Reg, uint16_t u16Nregs, uint16_t *pu16Regs)
+{
+	if (pu16Regs == NULL)
+	{
+		return (ERROR_OUT_OF_RANGE);
+	}
+	if ((u16Adr + u16Nregs) >= NUMBER_OF_R_REGS)
+	{
+		return (ERROR_OUT_OF_RANGE);
+	}
+
+	memcpy(&au16ModbusRReg[u16Adr], pu16Regs, u16Nregs * 2);
+	return (OPERATION_SUCCED);
 }
